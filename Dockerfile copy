@@ -1,0 +1,63 @@
+FROM continuumio/miniconda3:latest
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    gcc \
+    g++ \
+    gfortran \
+    cmake \
+    libcurl4-openssl-dev \
+    libopenmpi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Miniconda
+ENV CONDA_AUTO_UPDATE_CONDA=false
+ENV PATH=/opt/conda/bin:$PATH
+
+# Create a new conda environment
+RUN conda create -n maws-env python=3.7
+
+# Activate the conda environment
+SHELL ["conda", "run", "-n", "maws-env", "/bin/bash", "-c"]
+
+# Clone the MAWS repository
+RUN git clone https://github.com/igemsoftware/Heidelberg_15.git /maws
+
+# Set the working directory to the MAWS directory
+WORKDIR /maws
+
+# Install the required Python packages
+RUN pip install -r requirements.txt
+
+# Copy the AmberTools source code archive to the image
+COPY AmberTools23.tar.bz2 /tmp/
+
+# Set the working directory
+WORKDIR /tmp
+
+# Extract the source code archive
+RUN tar xf AmberTools23.tar.bz2
+
+# Change into the extracted directory
+WORKDIR /tmp/AmberTools23
+
+# Install necessary compilers and libraries
+RUN apt-get update && apt-get install -y cmake gcc gfortran g++ && rm -rf /var/lib/apt/lists/*
+
+# Configure and build AmberTools using CMake
+WORKDIR /tmp/AmberTools23/build
+RUN ../update_amber --upgrade
+RUN cmake .. -DCMAKE_INSTALL_PREFIX=/opt/amber
+RUN make install
+
+# Cleanup
+WORKDIR /
+RUN rm -rf /tmp/AmberTools23
+
+# Set the PATH environment variable to include AmberTools binaries
+ENV PATH="/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/amber/bin"
+
+# Set the ENTRYPOINT or CMD instruction to run your desired command or start a shell
+CMD ["python", "run_maws.py"]
+
